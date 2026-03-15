@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import WebSocket from 'ws';
 
 function textResult(data: unknown, isError = false) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }], isError };
@@ -111,10 +112,10 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
     },
   );
 
-  // 3. sms_wait — Poll GET /api/v1/messages until a matching message arrives or timeout
+  // 3. sms_wait — Listen on WebSocket for matching message, with polling fallback
   server.tool(
     'sms_wait',
-    'Wait for an SMS message matching criteria to arrive. Polls the message list until a match is found or timeout. This is the key tool for E2E testing — send an action that triggers an SMS, then use sms_wait to verify it arrived.',
+    'Wait for an SMS message matching criteria to arrive. Connects via WebSocket for real-time delivery, falling back to polling if WebSocket is unavailable. This is the key tool for E2E testing — send an action that triggers an SMS, then use sms_wait to verify it arrived.',
     {
       phone: z.string().describe('Phone number to wait for messages on (E.164 format)'),
       body_contains: z.string().optional().describe('Substring the message body must contain'),
@@ -122,45 +123,112 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
       poll_interval_ms: z.number().default(500).describe('How often to poll (ms, default 500)'),
     },
     async ({ phone, body_contains, timeout_ms, poll_interval_ms }) => {
-      const deadline = Date.now() + timeout_ms;
-
       const phoneId = await resolvePhoneId(phone);
 
-      while (Date.now() < deadline) {
-        const params: Record<string, string> = { limit: '100' };
-        if (phoneId) params.phone_id = phoneId;
-        if (body_contains) params.q = body_contains;
-
-        const { status, data } = await apiFetch('/api/v1/messages', { params });
-
-        if (status >= 400 || status === 0) {
-          return textResult({ found: false, error: `API error (status ${status})`, details: data }, true);
-        }
-
-        const result = data as { data?: Array<{ phone_number?: string; body?: string; direction?: string }> };
-        if (result.data && Array.isArray(result.data)) {
-          const match = result.data.find((msg) => {
-            if (msg.phone_number !== phone) return false;
-            if (body_contains && !msg.body?.includes(body_contains)) return false;
-            return true;
-          });
-
-          if (match) {
-            return textResult({ found: true, message: match });
-          }
-        }
-
-        // Wait before polling again
-        await new Promise((resolve) => setTimeout(resolve, poll_interval_ms));
+      function matchesMessage(msg: { phone_number?: string; body?: string }): boolean {
+        if (msg.phone_number !== phone) return false;
+        if (body_contains && !msg.body?.includes(body_contains)) return false;
+        return true;
       }
 
-      return textResult(
-        {
-          found: false,
-          error: `No matching message found within ${timeout_ms}ms for phone ${phone}${body_contains ? ` containing "${body_contains}"` : ''}`,
-        },
-        true,
-      );
+      // Polling fallback (original approach)
+      async function pollForMessage(): Promise<ReturnType<typeof textResult>> {
+        const deadline = Date.now() + timeout_ms;
+
+        while (Date.now() < deadline) {
+          const params: Record<string, string> = { limit: '100' };
+          if (phoneId) params.phone_id = phoneId;
+          if (body_contains) params.q = body_contains;
+
+          const { status, data } = await apiFetch('/api/v1/messages', { params });
+
+          if (status >= 400 || status === 0) {
+            return textResult({ found: false, error: `API error (status ${status})`, details: data }, true);
+          }
+
+          const result = data as {
+            data?: Array<{ phone_number?: string; body?: string; direction?: string }>;
+          };
+          if (result.data && Array.isArray(result.data)) {
+            const match = result.data.find((msg) => matchesMessage(msg));
+
+            if (match) {
+              return textResult({ found: true, message: match });
+            }
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, poll_interval_ms));
+        }
+
+        return textResult(
+          {
+            found: false,
+            error: `No matching message found within ${timeout_ms}ms for phone ${phone}${body_contains ? ` containing "${body_contains}"` : ''}`,
+          },
+          true,
+        );
+      }
+
+      // WebSocket approach
+      const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
+      let ws: WebSocket | undefined;
+
+      try {
+        return await new Promise<ReturnType<typeof textResult>>((resolve) => {
+          let settled = false;
+
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              ws?.close();
+              resolve(
+                textResult(
+                  {
+                    found: false,
+                    error: `No matching message found within ${timeout_ms}ms for phone ${phone}${body_contains ? ` containing "${body_contains}"` : ''}`,
+                  },
+                  true,
+                ),
+              );
+            }
+          }, timeout_ms);
+
+          ws = new WebSocket(wsUrl);
+
+          ws.on('message', (raw: WebSocket.RawData) => {
+            if (settled) return;
+            try {
+              const event = JSON.parse(raw.toString()) as {
+                type?: string;
+                data?: { phone_number?: string; body?: string };
+              };
+              if (event.type === 'message:new' && event.data && matchesMessage(event.data)) {
+                settled = true;
+                clearTimeout(timer);
+                ws?.close();
+                resolve(textResult({ found: true, message: event.data }));
+              }
+            } catch {
+              // Ignore malformed messages
+            }
+          });
+
+          ws.on('error', () => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              ws?.close();
+              // Fall back to polling when WebSocket connection fails
+              resolve(pollForMessage());
+            }
+          });
+        });
+      } finally {
+        // Ensure WebSocket is closed to prevent leaks
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+          ws.close();
+        }
+      }
     },
   );
 
