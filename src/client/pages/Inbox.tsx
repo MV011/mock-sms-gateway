@@ -48,7 +48,11 @@ export default function Inbox() {
 
   useWebSocket({
     onMessageNew: useCallback((msg: Message) => {
-      setAllMessages((prev) => [...prev, msg]);
+      setAllMessages((prev) => {
+        // Deduplicate — guard against multiple WebSocket connections (e.g. StrictMode)
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
     }, []),
 
     onMessageStatus: useCallback((data: { id: string; status: string }) => {
@@ -60,7 +64,10 @@ export default function Inbox() {
     }, []),
 
     onNumberCreated: useCallback((phone: PhoneNumber) => {
-      setNumbers((prev) => [...prev, phone]);
+      setNumbers((prev) => {
+        if (prev.some((n) => n.id === phone.id)) return prev;
+        return [...prev, phone];
+      });
     }, []),
 
     onNumberUpdated: useCallback((phone: PhoneNumber) => {

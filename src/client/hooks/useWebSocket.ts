@@ -63,11 +63,15 @@ export function useWebSocket(handlers: WSHandlers) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef(handlers);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disposedRef = useRef(false);
 
   // Keep handlers ref current without triggering reconnect
   handlersRef.current = handlers;
 
   const connect = useCallback(() => {
+    // Don't reconnect if the hook has been disposed (StrictMode cleanup)
+    if (disposedRef.current) return;
+
     // Clean up existing connection
     if (wsRef.current) {
       wsRef.current.close();
@@ -113,10 +117,12 @@ export function useWebSocket(handlers: WSHandlers) {
 
     ws.onclose = () => {
       wsRef.current = null;
-      // Auto-reconnect after delay
-      reconnectTimerRef.current = setTimeout(() => {
-        connect();
-      }, RECONNECT_DELAY);
+      // Only reconnect if not disposed
+      if (!disposedRef.current) {
+        reconnectTimerRef.current = setTimeout(() => {
+          connect();
+        }, RECONNECT_DELAY);
+      }
     };
 
     ws.onerror = () => {
@@ -127,11 +133,14 @@ export function useWebSocket(handlers: WSHandlers) {
   }, []);
 
   useEffect(() => {
+    disposedRef.current = false;
     connect();
 
     return () => {
+      disposedRef.current = true;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.close();
