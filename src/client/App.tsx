@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Inbox from './pages/Inbox';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -7,14 +8,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/inbox" replace />} />
         <Route path="/inbox" element={<Inbox />} />
-        <Route
-          path="/settings"
-          element={
-            <div className="flex h-full items-center justify-center text-gray-500">
-              Settings — coming soon
-            </div>
-          }
-        />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </div>
   );
