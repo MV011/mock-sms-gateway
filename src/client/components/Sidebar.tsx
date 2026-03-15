@@ -15,6 +15,7 @@ interface SidebarProps {
   numbers: PhoneNumber[];
   messages: Message[];
   catchAllCount: number;
+  unreadCounts: Record<string, number>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
@@ -23,6 +24,7 @@ export default function Sidebar({
   numbers,
   messages,
   catchAllCount,
+  unreadCounts,
   selectedId,
   onSelect,
 }: SidebarProps) {
@@ -100,6 +102,7 @@ export default function Sidebar({
                 key={num.id}
                 phone={num}
                 meta={numberMeta.get(num.id)}
+                unread={unreadCounts[num.id] ?? 0}
                 isSelected={selectedId === num.id}
                 onSelect={onSelect}
               />
@@ -117,6 +120,7 @@ export default function Sidebar({
                 key={num.id}
                 phone={num}
                 meta={numberMeta.get(num.id)}
+                unread={unreadCounts[num.id] ?? 0}
                 isSelected={selectedId === num.id}
                 onSelect={onSelect}
               />
@@ -150,9 +154,9 @@ export default function Sidebar({
               Unrecognized numbers
             </div>
           </div>
-          {catchAllCount > 0 && (
-            <span className="shrink-0 rounded-full bg-[#4ecdc4] px-2 py-0.5 text-xs font-medium text-[#010409]">
-              {catchAllCount}
+          {(unreadCounts.__catch_all__ ?? 0) > 0 && (
+            <span className="shrink-0 animate-pulse rounded-full bg-[#4ecdc4] px-2 py-0.5 text-xs font-medium text-[#010409]">
+              {unreadCounts.__catch_all__}
             </span>
           )}
         </button>
@@ -166,16 +170,19 @@ export default function Sidebar({
 function NumberItem({
   phone,
   meta,
+  unread,
   isSelected,
   onSelect,
 }: {
   phone: PhoneNumber;
   meta?: { lastMessage: Message | null; unread: number };
+  unread: number;
   isSelected: boolean;
   onSelect: (id: string) => void;
 }) {
   const behaviorIcon = BEHAVIOR_ICONS[phone.behavior] ?? '';
   const lastMsg = meta?.lastMessage;
+  const hasUnread = unread > 0 && !isSelected;
 
   return (
     <button
@@ -183,18 +190,22 @@ function NumberItem({
       className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
         isSelected
           ? 'bg-[#161b22] text-gray-200'
-          : 'text-gray-300 hover:bg-[#161b22]/50'
+          : hasUnread
+            ? 'bg-[#161b22]/30 text-gray-100 hover:bg-[#161b22]/60'
+            : 'text-gray-300 hover:bg-[#161b22]/50'
       }`}
     >
       {/* Avatar / indicator */}
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#21262d] text-sm">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${
+        hasUnread ? 'bg-[#4ecdc4]/20 text-[#4ecdc4]' : 'bg-[#21262d]'
+      }`}>
         {behaviorIcon || phone.number.slice(-2)}
       </span>
 
       {/* Details */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium">
+          <span className={`truncate text-sm ${hasUnread ? 'font-semibold' : 'font-medium'}`}>
             {phone.label || phone.number}
           </span>
           {phone.is_magic && (
@@ -203,17 +214,21 @@ function NumberItem({
             </span>
           )}
         </div>
-        <div className="truncate text-xs text-gray-500">
+        <div className={`truncate text-xs ${hasUnread ? 'text-gray-300' : 'text-gray-500'}`}>
           {lastMsg ? lastMsg.body : phone.number}
         </div>
       </div>
 
-      {/* Timestamp */}
-      {lastMsg && (
+      {/* Unread badge or timestamp */}
+      {hasUnread ? (
+        <span className="shrink-0 animate-pulse rounded-full bg-[#4ecdc4] px-2 py-0.5 text-xs font-bold text-[#010409]">
+          {unread}
+        </span>
+      ) : lastMsg ? (
         <span className="shrink-0 text-[10px] text-gray-500">
           {formatTime(lastMsg.created_at)}
         </span>
-      )}
+      ) : null}
     </button>
   );
 }
