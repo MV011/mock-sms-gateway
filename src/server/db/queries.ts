@@ -99,7 +99,16 @@ function rowToPhoneNumber(row: PhoneNumberRow): PhoneNumber {
     label: row.label,
     country_code: row.country_code,
     behavior: row.behavior as Behavior,
-    behavior_config: row.behavior_config ? JSON.parse(row.behavior_config) : null,
+    behavior_config: row.behavior_config
+      ? (() => {
+          try {
+            return JSON.parse(row.behavior_config!) as Record<string, unknown>;
+          } catch {
+            console.warn(`Failed to parse behavior_config for phone number ${row.id}, defaulting to {}`);
+            return {};
+          }
+        })()
+      : null,
     is_magic: row.is_magic === 1,
     pinned: row.pinned === 1,
     created_at: row.created_at,
@@ -128,7 +137,9 @@ export function createPhoneNumber(db: Database.Database, input: CreatePhoneNumbe
     now,
   );
 
-  return getPhoneNumberById(db, id)!;
+  const result = getPhoneNumberById(db, id);
+  if (!result) throw new Error(`Failed to read back phone number after insert: ${id}`);
+  return result;
 }
 
 export function getPhoneNumbers(db: Database.Database): PhoneNumber[] {
@@ -256,7 +267,16 @@ function rowToMessage(row: MessageRow): Message {
     template_key: row.template_key,
     status: row.status as MessageStatus,
     error_message: row.error_message,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata: row.metadata
+      ? (() => {
+          try {
+            return JSON.parse(row.metadata!) as Record<string, unknown>;
+          } catch {
+            console.warn(`Failed to parse metadata for message ${row.id}, defaulting to {}`);
+            return {};
+          }
+        })()
+      : null,
     webhook_status: row.webhook_status,
     created_at: row.created_at,
   };
@@ -290,7 +310,9 @@ export function createMessage(db: Database.Database, input: CreateMessageInput):
     now,
   );
 
-  return getMessageById(db, id)!;
+  const result = getMessageById(db, id);
+  if (!result) throw new Error(`Failed to read back message after insert: ${id}`);
+  return result;
 }
 
 export function getMessageById(db: Database.Database, id: string): Message | undefined {
