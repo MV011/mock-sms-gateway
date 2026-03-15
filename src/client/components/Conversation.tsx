@@ -1,17 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { PhoneNumber, Message } from '../lib/api';
+import { BEHAVIOR_LABELS } from '../lib/constants';
 import MessageBubble from './MessageBubble';
 import ReplyComposer from './ReplyComposer';
-
-// Behavior labels
-const BEHAVIOR_LABELS: Record<string, string> = {
-  deliver: 'Deliver',
-  fail: 'Always Fail',
-  delay: 'Delayed',
-  reject: 'Reject',
-  rate_limit: 'Rate Limited',
-  timeout: 'Timeout',
-};
 
 interface ConversationProps {
   phone: PhoneNumber | null; // null for catch-all

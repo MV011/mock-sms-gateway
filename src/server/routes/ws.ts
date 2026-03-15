@@ -18,7 +18,8 @@ export function attachWebSocket(server: HttpServer, ctx: AppContext): void {
       try {
         send(payload);
       } catch {
-        // Client already gone — will be cleaned up on close/error
+        // Client already gone — remove from set
+        clients.delete(send);
       }
     }
   };
@@ -36,7 +37,8 @@ export function attachWebSocket(server: HttpServer, ctx: AppContext): void {
       clients.delete(send);
     });
 
-    ws.on('error', () => {
+    ws.on('error', (err: Error) => {
+      console.error('WebSocket client error:', err.message);
       clients.delete(send);
     });
   });

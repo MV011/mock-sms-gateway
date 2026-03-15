@@ -37,8 +37,10 @@ reply.post('/', async (c) => {
 
   broadcast({ type: 'message:new', data: msg });
 
-  // Determine webhook URL: per-request > DB settings > env
-  let webhookUrl = webhookUrlOverride;
+  // Determine webhook URL: per-request (only if allowed hosts configured) > DB settings > env
+  const allowedHosts = process.env.WEBHOOK_ALLOWED_HOSTS;
+  let webhookUrl = (allowedHosts && webhookUrlOverride) ? webhookUrlOverride : undefined;
+  let webhookError: string | undefined;
 
   if (!webhookUrl) {
     // Check DB settings
@@ -49,7 +51,8 @@ reply.post('/', async (c) => {
       try {
         webhookUrl = JSON.parse(settingsRow.value) as string;
       } catch {
-        // ignore parse error
+        console.warn('Malformed webhook_url in settings:', settingsRow.value);
+        webhookError = 'Malformed webhook_url in settings';
       }
     }
   }
@@ -60,7 +63,6 @@ reply.post('/', async (c) => {
 
   // Dispatch webhook if URL is configured
   if (webhookUrl) {
-    const allowedHosts = process.env.WEBHOOK_ALLOWED_HOSTS;
     const result = await dispatchWebhook(
       webhookUrl,
       {
@@ -80,6 +82,7 @@ reply.post('/', async (c) => {
       message_id: msg.id,
       webhook_status: webhookStatus,
       ...(result.error ? { webhook_error: result.error } : {}),
+      ...(webhookError ? { webhook_error: webhookError } : {}),
     });
   }
 
@@ -87,6 +90,7 @@ reply.post('/', async (c) => {
     success: true,
     message_id: msg.id,
     webhook_status: null,
+    ...(webhookError ? { webhook_error: webhookError } : {}),
   });
 });
 

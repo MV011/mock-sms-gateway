@@ -8,8 +8,13 @@ import {
   updatePhoneNumber,
   deletePhoneNumber,
 } from '../db/queries.js';
+import type { Behavior } from '../db/queries.js';
 
 const numbers = new Hono<AppEnv>();
+
+const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+
+const VALID_BEHAVIORS: Behavior[] = ['deliver', 'fail', 'delay', 'reject', 'rate_limit', 'timeout'];
 
 // Country code to E.164 prefix mapping
 const COUNTRY_PREFIXES: Record<string, { prefix: string; length: number }> = {
@@ -53,6 +58,15 @@ numbers.post('/', async (c) => {
     return c.json({ error: 'Missing required field: number' }, 400);
   }
 
+  if (!E164_REGEX.test(number)) {
+    return c.json({ error: 'Invalid phone number format. Expected E.164 (e.g. +40712345678)' }, 400);
+  }
+
+  const behaviorInput = body.behavior as string | undefined;
+  if (behaviorInput && !VALID_BEHAVIORS.includes(behaviorInput as Behavior)) {
+    return c.json({ error: `Invalid behavior. Valid values: ${VALID_BEHAVIORS.join(', ')}` }, 400);
+  }
+
   // Check for duplicates
   const existing = getPhoneNumberByNumber(db, number);
   if (existing) {
@@ -63,7 +77,7 @@ numbers.post('/', async (c) => {
     number,
     label: body.label as string | undefined,
     country_code: body.country_code as string | undefined,
-    behavior: (body.behavior as string | undefined) as 'deliver' | undefined,
+    behavior: behaviorInput as Behavior | undefined,
     behavior_config: body.behavior_config as Record<string, unknown> | undefined,
     pinned: body.pinned as boolean | undefined,
   });
@@ -121,10 +135,15 @@ numbers.patch('/:id', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400);
   }
 
+  const patchBehavior = body.behavior as string | undefined;
+  if (patchBehavior && !VALID_BEHAVIORS.includes(patchBehavior as Behavior)) {
+    return c.json({ error: `Invalid behavior. Valid values: ${VALID_BEHAVIORS.join(', ')}` }, 400);
+  }
+
   const updated = updatePhoneNumber(db, id, {
     label: body.label as string | undefined,
     country_code: body.country_code as string | undefined,
-    behavior: body.behavior as 'deliver' | undefined,
+    behavior: patchBehavior as Behavior | undefined,
     behavior_config: body.behavior_config as Record<string, unknown> | undefined,
     pinned: body.pinned as boolean | undefined,
   });

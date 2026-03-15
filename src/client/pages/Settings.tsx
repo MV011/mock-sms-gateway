@@ -2,26 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type PhoneNumber } from '../lib/api';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { BEHAVIOR_LABELS, BEHAVIOR_COLORS } from '../lib/constants';
 import NumberForm from '../components/NumberForm';
-
-// Behavior labels
-const BEHAVIOR_LABELS: Record<string, string> = {
-  deliver: 'Deliver',
-  fail: 'Fail',
-  delay: 'Delay',
-  reject: 'Reject',
-  rate_limit: 'Rate Limit',
-  timeout: 'Timeout',
-};
-
-const BEHAVIOR_COLORS: Record<string, string> = {
-  deliver: 'text-[#238636]',
-  fail: 'text-red-400',
-  delay: 'text-yellow-400',
-  reject: 'text-orange-400',
-  rate_limit: 'text-purple-400',
-  timeout: 'text-gray-400',
-};
 
 export default function Settings() {
   const [numbers, setNumbers] = useState<PhoneNumber[]>([]);
@@ -47,7 +29,10 @@ export default function Settings() {
   // WebSocket for live updates
   useWebSocket({
     onNumberCreated: useCallback((phone: PhoneNumber) => {
-      setNumbers((prev) => [...prev, phone]);
+      setNumbers((prev) => {
+        if (prev.some((n) => n.id === phone.id)) return prev;
+        return [...prev, phone];
+      });
     }, []),
 
     onNumberUpdated: useCallback((phone: PhoneNumber) => {

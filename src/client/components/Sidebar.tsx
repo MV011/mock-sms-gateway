@@ -31,19 +31,17 @@ export default function Sidebar({
   const [search, setSearch] = useState('');
   const location = useLocation();
 
-  // Compute last message and unread-ish count per phone number
+  // Compute last message per phone number
   const numberMeta = useMemo(() => {
     const map = new Map<
       string,
-      { lastMessage: Message | null; unread: number }
+      { lastMessage: Message | null }
     >();
 
     for (const num of numbers) {
       const numMessages = messages.filter((m) => m.phone_id === num.id);
       const last = numMessages.length > 0 ? numMessages[numMessages.length - 1] : null;
-      // "Unread" = inbound messages (simulated replies) -- simple heuristic
-      const unread = numMessages.filter((m) => m.direction === 'inbound').length;
-      map.set(num.id, { lastMessage: last, unread });
+      map.set(num.id, { lastMessage: last });
     }
 
     return map;
@@ -175,7 +173,7 @@ function NumberItem({
   onSelect,
 }: {
   phone: PhoneNumber;
-  meta?: { lastMessage: Message | null; unread: number };
+  meta?: { lastMessage: Message | null };
   unread: number;
   isSelected: boolean;
   onSelect: (id: string) => void;

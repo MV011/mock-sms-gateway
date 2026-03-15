@@ -21,13 +21,13 @@ stats.get('/', (c) => {
   const row = db.prepare(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
-      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-      SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-      SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
-      SUM(CASE WHEN direction = 'outbound' THEN 1 ELSE 0 END) as outbound,
-      SUM(CASE WHEN direction = 'inbound' THEN 1 ELSE 0 END) as inbound,
-      SUM(CASE WHEN phone_id IS NULL THEN 1 ELSE 0 END) as catch_all
+      COALESCE(SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END), 0) as delivered,
+      COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
+      COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+      COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) as rejected,
+      COALESCE(SUM(CASE WHEN direction = 'outbound' THEN 1 ELSE 0 END), 0) as outbound,
+      COALESCE(SUM(CASE WHEN direction = 'inbound' THEN 1 ELSE 0 END), 0) as inbound,
+      COALESCE(SUM(CASE WHEN phone_id IS NULL THEN 1 ELSE 0 END), 0) as catch_all
     FROM messages
   `).get() as StatsRow;
 

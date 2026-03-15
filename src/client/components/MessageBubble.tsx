@@ -1,5 +1,12 @@
 import type { Message } from '../lib/api';
 
+const STATUS_COLORS: Record<string, string> = {
+  delivered: 'text-green-400',
+  failed: 'text-red-400',
+  rejected: 'text-orange-400',
+  pending: 'text-yellow-400',
+};
+
 interface MessageBubbleProps {
   message: Message;
   showDate?: boolean;
@@ -58,15 +65,7 @@ export default function MessageBubble({ message, showDate }: MessageBubbleProps)
             {/* Status badge */}
             {isOutbound && (
               <span
-                className={`flex items-center gap-0.5 ${
-                  message.status === 'delivered'
-                    ? 'text-[#238636]'
-                    : message.status === 'failed'
-                      ? 'text-red-400'
-                      : message.status === 'rejected'
-                        ? 'text-orange-400'
-                        : 'text-gray-500'
-                }`}
+                className={`flex items-center gap-0.5 ${STATUS_COLORS[message.status] ?? 'text-gray-500'}`}
               >
                 {message.status === 'delivered' ? '\u2713' : '\u2717'}{' '}
                 {message.status.charAt(0).toUpperCase() + message.status.slice(1)}
