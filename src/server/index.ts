@@ -5,6 +5,11 @@ import type { AppEnv } from './context.js';
 import type { AppContext } from './context.js';
 import { RateLimiter } from './rate-limiter.js';
 import sendRoute from './routes/send.js';
+import numbersRoute from './routes/numbers.js';
+import messagesRoute from './routes/messages.js';
+import replyRoute from './routes/reply.js';
+import statsRoute from './routes/stats.js';
+import { resetAll } from './db/queries.js';
 
 export function createApp(db: Database.Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -42,6 +47,19 @@ export function createApp(db: Database.Database): Hono<AppEnv> {
 
   // Routes
   app.route('/api/v1/send', sendRoute);
+  app.route('/api/v1/numbers', numbersRoute);
+  app.route('/api/v1/messages', messagesRoute);
+  app.route('/api/v1/reply', replyRoute);
+  app.route('/api/v1/stats', statsRoute);
+
+  // Reset endpoint
+  app.post('/api/v1/reset', (c) => {
+    const { db, rateLimiter, broadcast } = c.get('ctx');
+    resetAll(db);
+    rateLimiter.clear();
+    broadcast({ type: 'reset', data: {} });
+    return c.json({ success: true });
+  });
 
   return app;
 }

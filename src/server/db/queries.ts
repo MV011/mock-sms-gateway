@@ -363,3 +363,11 @@ export function clearMessages(db: Database.Database, phoneId?: string): void {
 export function updateMessageWebhookStatus(db: Database.Database, id: string, webhookStatus: string): void {
   db.prepare('UPDATE messages SET webhook_status = ? WHERE id = ?').run(webhookStatus, id);
 }
+
+// ---------- Reset ----------
+
+export function resetAll(db: Database.Database): void {
+  db.prepare('DELETE FROM messages').run();
+  db.prepare('DELETE FROM phone_numbers').run();
+  seedMagicNumbers(db);
+}
