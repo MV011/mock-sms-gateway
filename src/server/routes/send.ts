@@ -5,6 +5,8 @@ import { applyBehavior } from '../behaviors.js';
 
 const send = new Hono<AppEnv>();
 
+const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+
 send.post('/', async (c) => {
   const ctx = c.get('ctx');
   const { db, rateLimiter, broadcast } = ctx;
@@ -24,6 +26,9 @@ send.post('/', async (c) => {
 
   if (!to) {
     return c.json({ error: 'Missing required field: to' }, 400);
+  }
+  if (!E164_REGEX.test(to)) {
+    return c.json({ error: 'Invalid phone number format. Expected E.164 (e.g. +40712345678)' }, 400);
   }
   if (!messageBody) {
     return c.json({ error: 'Missing required field: body' }, 400);
@@ -64,7 +69,7 @@ send.post('/', async (c) => {
     }
 
     // Record the send for rate limiting
-    rateLimiter.record(to);
+    rateLimiter.record(to, windowSeconds);
   }
 
   // Apply behavior

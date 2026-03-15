@@ -17,11 +17,16 @@ export class RateLimiter {
 
   /**
    * Record a send for a phone number.
+   * Prunes timestamps outside the window to prevent memory leaks.
+   * Defaults to 3600 seconds (1 hour) if windowSeconds is not provided.
    */
-  record(phone: string): void {
+  record(phone: string, windowSeconds: number = 3600): void {
+    const now = Date.now();
+    const windowMs = windowSeconds * 1000;
     const entries = this.timestamps.get(phone) ?? [];
-    entries.push(Date.now());
-    this.timestamps.set(phone, entries);
+    const pruned = entries.filter(ts => now - ts < windowMs);
+    pruned.push(now);
+    this.timestamps.set(phone, pruned);
   }
 
   /**

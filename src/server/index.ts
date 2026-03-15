@@ -30,9 +30,12 @@ export function createApp(db: Database.Database): AppInstance {
 
   // CORS
   const corsOrigin = process.env.CORS_ORIGIN ?? '*';
+  if (!process.env.CORS_ORIGIN) {
+    console.warn("Warning: CORS_ORIGIN not set — defaulting to '*'. Set CORS_ORIGIN for staging/production.");
+  }
   app.use('*', cors({ origin: corsOrigin }));
 
-  // Optional API key auth
+  // API key auth
   const apiKey = process.env.API_KEY;
   if (apiKey) {
     app.use('/api/*', async (c, next) => {
@@ -42,7 +45,15 @@ export function createApp(db: Database.Database): AppInstance {
       }
       await next();
     });
+  } else {
+    console.warn('Warning: API_KEY not set — API is unauthenticated. Set API_KEY for staging/production deployments.');
   }
+
+  // Global error handler
+  app.onError((err, c) => {
+    console.error('Unhandled error:', err);
+    return c.json({ error: 'Internal server error', detail: err.message }, 500);
+  });
 
   // Inject context
   app.use('*', async (c, next) => {
@@ -101,7 +112,7 @@ export async function addStaticServing(app: Hono<AppEnv>): Promise<void> {
 }
 
 // Start server when run directly
-const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectRun) {
   const { serve } = await import('@hono/node-server');
   const { createDatabase } = await import('./db/connection.js');

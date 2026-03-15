@@ -28,7 +28,7 @@ export async function applyBehavior(
     }
 
     case 'delay': {
-      const delayMs = (config?.delay_ms as number) ?? 3000;
+      const delayMs = Math.min((config?.delay_ms as number) ?? 3000, MAX_TIMEOUT_MS);
       await sleep(delayMs);
       return { success: true, status: 'delivered' };
     }
@@ -50,6 +50,7 @@ export async function applyBehavior(
     }
 
     default:
-      return { success: true, status: 'delivered' };
+      console.warn(`Unknown behavior: ${behavior}`);
+      return { success: false, status: 'failed', error: `Unknown behavior: ${behavior}` };
   }
 }
