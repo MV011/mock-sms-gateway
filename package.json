@@ -14,8 +14,8 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build:client": "vite build --config vite.config.ts",
     "build": "npm run build:server && npm run build:client",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
   },
   "repository": {
     "type": "git",
