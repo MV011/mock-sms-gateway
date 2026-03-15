@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { registerTools } from './tools.js';
+
+const SMS_MOCK_URL = process.env.SMS_MOCK_URL ?? 'http://localhost:8026';
+const API_KEY = process.env.API_KEY;
+
+const server = new McpServer({
+  name: 'mock-sms-gateway',
+  version: '1.0.0',
+});
+
+registerTools(server, SMS_MOCK_URL, API_KEY);
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
