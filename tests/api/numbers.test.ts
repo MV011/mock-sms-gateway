@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestApp, type TestContext } from '../helpers.js';
 
 describe('Numbers API', () => {
@@ -6,6 +6,10 @@ describe('Numbers API', () => {
 
   beforeEach(() => {
     ctx = createTestApp();
+  });
+
+  afterEach(() => {
+    ctx.db.close();
   });
 
   describe('GET /api/v1/numbers', () => {
@@ -125,6 +129,20 @@ describe('Numbers API', () => {
       });
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/v1/numbers — invalid JSON', () => {
+    it('rejects non-JSON body with 400', async () => {
+      const res = await ctx.app.request('/api/v1/numbers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not valid json',
+      });
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toBeDefined();
     });
   });
 

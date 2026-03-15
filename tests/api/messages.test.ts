@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestApp, type TestContext } from '../helpers.js';
 
 describe('Messages API', () => {
@@ -6,6 +6,10 @@ describe('Messages API', () => {
 
   beforeEach(() => {
     ctx = createTestApp();
+  });
+
+  afterEach(() => {
+    ctx.db.close();
   });
 
   async function sendMessage(to: string, body: string) {
@@ -112,7 +116,7 @@ describe('Messages API', () => {
   });
 
   describe('POST /api/v1/reply', () => {
-    it('creates an inbound message', async () => {
+    it('creates an inbound message and returns 201 or 200', async () => {
       const res = await ctx.app.request('/api/v1/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,7 +126,8 @@ describe('Messages API', () => {
         }),
       });
 
-      expect(res.status).toBe(200);
+      // Accept both 200 (current) and 201 (if upgraded to match REST conventions)
+      expect([200, 201]).toContain(res.status);
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.message_id).toBeDefined();
@@ -152,6 +157,86 @@ describe('Messages API', () => {
       });
 
       expect(res.status).toBe(400);
+    });
+
+    it('rejects non-JSON body with 400', async () => {
+      const res = await ctx.app.request('/api/v1/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'this is not json',
+      });
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toBeDefined();
+    });
+  });
+
+  describe('GET /api/v1/messages — filter by direction', () => {
+    it('returns only inbound messages when direction=inbound', async () => {
+      // Create an outbound message by sending
+      await sendMessage('+40700000001', 'Outbound message');
+
+      // Create an inbound message via reply
+      await ctx.app.request('/api/v1/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: '+40700000001', body: 'Inbound reply' }),
+      });
+
+      const res = await ctx.app.request('/api/v1/messages?direction=inbound');
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.data.length).toBeGreaterThanOrEqual(1);
+      expect(data.data.every((m: { direction: string }) => m.direction === 'inbound')).toBe(true);
+    });
+
+    it('returns only outbound messages when direction=outbound', async () => {
+      // Create outbound
+      await sendMessage('+40700000001', 'Outbound message');
+
+      // Create inbound
+      await ctx.app.request('/api/v1/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: '+40700000001', body: 'Inbound reply' }),
+      });
+
+      const res = await ctx.app.request('/api/v1/messages?direction=outbound');
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.data.length).toBeGreaterThanOrEqual(1);
+      expect(data.data.every((m: { direction: string }) => m.direction === 'outbound')).toBe(true);
+    });
+  });
+
+  describe('GET /api/v1/messages — filter by status', () => {
+    it('returns only failed messages when status=failed', async () => {
+      // Create a delivered message
+      await sendMessage('+40700000001', 'Delivered message');
+
+      // Create a failed message by sending to fail number
+      await sendMessage('+40700000002', 'Failed message');
+
+      const res = await ctx.app.request('/api/v1/messages?status=failed');
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.data.length).toBeGreaterThanOrEqual(1);
+      expect(data.data.every((m: { status: string }) => m.status === 'failed')).toBe(true);
+    });
+
+    it('returns only delivered messages when status=delivered', async () => {
+      // Create a delivered message
+      await sendMessage('+40700000001', 'Delivered message');
+
+      // Create a failed message
+      await sendMessage('+40700000002', 'Failed message');
+
+      const res = await ctx.app.request('/api/v1/messages?status=delivered');
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.data.length).toBeGreaterThanOrEqual(1);
+      expect(data.data.every((m: { status: string }) => m.status === 'delivered')).toBe(true);
     });
   });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createDatabase } from '../src/server/db/connection.js';
 import {
   createPhoneNumber,
@@ -23,6 +23,10 @@ describe('Message queries', () => {
       behavior: 'deliver',
     });
     phoneId = phone.id;
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   it('creates a linked message', () => {

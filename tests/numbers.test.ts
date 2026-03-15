@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createDatabase } from '../src/server/db/connection.js';
 import {
   createPhoneNumber,
@@ -17,6 +17,10 @@ describe('Phone number CRUD', () => {
 
   beforeEach(() => {
     db = createDatabase(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   it('creates a phone number', () => {

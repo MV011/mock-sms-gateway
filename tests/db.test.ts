@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createDatabase } from '../src/server/db/connection.js';
 import { seedMagicNumbers } from '../src/server/db/queries.js';
 import Database from 'better-sqlite3';
@@ -8,6 +8,10 @@ describe('Database initialization', () => {
 
   beforeEach(() => {
     db = createDatabase(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   it('creates phone_numbers table', () => {
