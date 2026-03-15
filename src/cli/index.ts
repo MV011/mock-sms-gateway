@@ -28,7 +28,16 @@ async function api(
   // 204 No Content
   if (res.status === 204) return null;
 
-  const data = await res.json();
+  const text = await res.text();
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    if (!res.ok) {
+      throw new Error(`${res.status} ${text || res.statusText}`);
+    }
+    data = text;
+  }
 
   if (!res.ok) {
     const msg = (data as Record<string, unknown>).error ?? res.statusText;

@@ -1,6 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
+function textResult(data: unknown, isError = false) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }], isError };
+}
+
 /**
  * Registers all 8 SMS MCP tools on the given MCP server.
  * Each tool wraps a REST endpoint on the mock SMS gateway.
@@ -25,19 +29,36 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         }
       }
     }
-    const res = await fetch(url.toString(), {
-      method: options.method ?? 'GET',
-      headers,
-      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-    });
-    const text = await res.text();
-    let data: unknown;
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
+      const res = await fetch(url.toString(), {
+        method: options.method ?? 'GET',
+        headers,
+        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      });
+      const text = await res.text();
+      let data: unknown;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
+      }
+      return { status: res.status, data };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        status: 0,
+        data: { error: `Connection failed: ${message}. Is the mock SMS gateway running at ${baseUrl}?` },
+      };
     }
-    return { status: res.status, data };
+  }
+
+  async function resolvePhoneId(phone: string): Promise<string | undefined> {
+    const { status, data } = await apiFetch('/api/v1/numbers');
+    if (status !== 0 && Array.isArray(data)) {
+      const match = (data as Array<{ id: string; number: string }>).find((n) => n.number === phone);
+      return match?.id;
+    }
+    return undefined;
   }
 
   // 1. sms_send — POST /api/v1/send
@@ -60,10 +81,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         body: payload,
       });
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-        isError: status >= 400,
-      };
+      return textResult(data, status >= 400);
     },
   );
 
@@ -72,23 +90,24 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
     'sms_list',
     'List SMS messages with optional filtering by phone, catch-all status, or body text search.',
     {
-      phone: z.string().optional().describe('Filter by phone_id'),
+      phone: z.string().optional().describe('Phone number in E.164 format'),
       catch_all: z.boolean().optional().describe('If true, show only messages to unknown numbers'),
       q: z.string().optional().describe('Search messages by body text (substring match)'),
       limit: z.number().optional().describe('Max number of messages to return (default 50)'),
     },
     async ({ phone, catch_all, q, limit }) => {
       const params: Record<string, string> = {};
-      if (phone) params.phone_id = phone;
+      if (phone) {
+        const phoneId = await resolvePhoneId(phone);
+        if (phoneId) params.phone_id = phoneId;
+      }
       if (catch_all) params.catch_all = 'true';
       if (q) params.q = q;
       if (limit !== undefined) params.limit = String(limit);
 
       const { data } = await apiFetch('/api/v1/messages', { params });
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      return textResult(data);
     },
   );
 
@@ -105,10 +124,18 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
     async ({ phone, body_contains, timeout_ms, poll_interval_ms }) => {
       const deadline = Date.now() + timeout_ms;
 
+      const phoneId = await resolvePhoneId(phone);
+
       while (Date.now() < deadline) {
-        const params: Record<string, string> = { q: body_contains ?? '' };
-        // We search messages and look for ones matching the phone number
-        const { data } = await apiFetch('/api/v1/messages', { params });
+        const params: Record<string, string> = { limit: '100' };
+        if (phoneId) params.phone_id = phoneId;
+        if (body_contains) params.q = body_contains;
+
+        const { status, data } = await apiFetch('/api/v1/messages', { params });
+
+        if (status >= 400 || status === 0) {
+          return textResult({ found: false, error: `API error (status ${status})`, details: data }, true);
+        }
 
         const result = data as { data?: Array<{ phone_number?: string; body?: string; direction?: string }> };
         if (result.data && Array.isArray(result.data)) {
@@ -119,14 +146,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
           });
 
           if (match) {
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: JSON.stringify({ found: true, message: match }, null, 2),
-                },
-              ],
-            };
+            return textResult({ found: true, message: match });
           }
         }
 
@@ -134,22 +154,13 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         await new Promise((resolve) => setTimeout(resolve, poll_interval_ms));
       }
 
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(
-              {
-                found: false,
-                error: `No matching message found within ${timeout_ms}ms for phone ${phone}${body_contains ? ` containing "${body_contains}"` : ''}`,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-        isError: true,
-      };
+      return textResult(
+        {
+          found: false,
+          error: `No matching message found within ${timeout_ms}ms for phone ${phone}${body_contains ? ` containing "${body_contains}"` : ''}`,
+        },
+        true,
+      );
     },
   );
 
@@ -167,10 +178,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         body: { from, body },
       });
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-        isError: status >= 400,
-      };
+      return textResult(data, status >= 400);
     },
   );
 
@@ -203,10 +211,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         body: payload,
       });
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-        isError: status >= 400,
-      };
+      return textResult(data, status >= 400);
     },
   );
 
@@ -223,15 +228,10 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
       });
 
       if (status === 204) {
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ success: true, deleted: id }, null, 2) }],
-        };
+        return textResult({ success: true, deleted: id });
       }
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ success: false, status }, null, 2) }],
-        isError: true,
-      };
+      return textResult({ success: false, status }, true);
     },
   );
 
@@ -246,10 +246,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
     async ({ phone_id, reset }) => {
       if (reset) {
         const { status, data } = await apiFetch('/api/v1/reset', { method: 'POST' });
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-          isError: status >= 400,
-        };
+        return textResult(data, status >= 400);
       }
 
       const params: Record<string, string> = {};
@@ -260,15 +257,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
         params,
       });
 
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({ success: status === 204, cleared: phone_id ?? 'all' }, null, 2),
-          },
-        ],
-        isError: status >= 400,
-      };
+      return textResult({ success: status === 204, cleared: phone_id ?? 'all' }, status >= 400);
     },
   );
 
@@ -280,9 +269,7 @@ export function registerTools(server: McpServer, baseUrl: string, apiKey?: strin
     async () => {
       const { data } = await apiFetch('/api/v1/stats');
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      return textResult(data);
     },
   );
 }

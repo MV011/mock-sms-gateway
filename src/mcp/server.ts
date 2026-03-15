@@ -15,4 +15,10 @@ const server = new McpServer({
 registerTools(server, SMS_MOCK_URL, API_KEY);
 
 const transport = new StdioServerTransport();
-await server.connect(transport);
+try {
+  await server.connect(transport);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`MCP server failed to start: ${message}\n`);
+  process.exit(1);
+}
