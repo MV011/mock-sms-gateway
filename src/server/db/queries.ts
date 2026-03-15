@@ -178,3 +178,188 @@ export function deletePhoneNumber(db: Database.Database, id: string): boolean {
   const result = db.prepare('DELETE FROM phone_numbers WHERE id = ?').run(id);
   return result.changes > 0;
 }
+
+// ---------- Message Types ----------
+
+export type Direction = 'outbound' | 'inbound';
+export type MessageStatus = 'delivered' | 'failed' | 'pending' | 'rejected';
+
+export interface Message {
+  id: string;
+  phone_id: string | null;
+  phone_number: string;
+  direction: Direction;
+  body: string;
+  from_name: string | null;
+  template_key: string | null;
+  status: MessageStatus;
+  error_message: string | null;
+  metadata: Record<string, unknown> | null;
+  webhook_status: string | null;
+  created_at: string;
+}
+
+export interface CreateMessageInput {
+  phone_number: string;
+  direction: Direction;
+  body: string;
+  from_name?: string;
+  template_key?: string;
+  status: MessageStatus;
+  error_message?: string;
+  metadata?: Record<string, unknown>;
+  webhook_status?: string;
+}
+
+export interface GetMessagesOptions {
+  phone_id?: string;
+  catch_all?: boolean;
+  q?: string;
+  direction?: Direction;
+  status?: MessageStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedMessages {
+  data: Message[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ---------- Message Row Helper ----------
+
+interface MessageRow {
+  id: string;
+  phone_id: string | null;
+  phone_number: string;
+  direction: string;
+  body: string;
+  from_name: string | null;
+  template_key: string | null;
+  status: string;
+  error_message: string | null;
+  metadata: string | null;
+  webhook_status: string | null;
+  created_at: string;
+}
+
+function rowToMessage(row: MessageRow): Message {
+  return {
+    id: row.id,
+    phone_id: row.phone_id,
+    phone_number: row.phone_number,
+    direction: row.direction as Direction,
+    body: row.body,
+    from_name: row.from_name,
+    template_key: row.template_key,
+    status: row.status as MessageStatus,
+    error_message: row.error_message,
+    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    webhook_status: row.webhook_status,
+    created_at: row.created_at,
+  };
+}
+
+// ---------- Message CRUD ----------
+
+export function createMessage(db: Database.Database, input: CreateMessageInput): Message {
+  const id = uuidv4();
+  const now = new Date().toISOString();
+
+  // Auto-link to phone_numbers by looking up the phone_number
+  const phone = getPhoneNumberByNumber(db, input.phone_number);
+  const phoneId = phone?.id ?? null;
+
+  db.prepare(`
+    INSERT INTO messages (id, phone_id, phone_number, direction, body, from_name, template_key, status, error_message, metadata, webhook_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    phoneId,
+    input.phone_number,
+    input.direction,
+    input.body,
+    input.from_name ?? null,
+    input.template_key ?? null,
+    input.status,
+    input.error_message ?? null,
+    input.metadata ? JSON.stringify(input.metadata) : null,
+    input.webhook_status ?? null,
+    now,
+  );
+
+  return getMessageById(db, id)!;
+}
+
+export function getMessageById(db: Database.Database, id: string): Message | undefined {
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow | undefined;
+  return row ? rowToMessage(row) : undefined;
+}
+
+export function getMessages(db: Database.Database, options: GetMessagesOptions): PaginatedMessages {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (options.phone_id) {
+    conditions.push('phone_id = ?');
+    params.push(options.phone_id);
+  }
+
+  if (options.catch_all) {
+    conditions.push('phone_id IS NULL');
+  }
+
+  if (options.q) {
+    conditions.push('body LIKE ?');
+    params.push(`%${options.q}%`);
+  }
+
+  if (options.direction) {
+    conditions.push('direction = ?');
+    params.push(options.direction);
+  }
+
+  if (options.status) {
+    conditions.push('status = ?');
+    params.push(options.status);
+  }
+
+  const whereClause = conditions.length > 0
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
+
+  const limit = options.limit ?? 50;
+  const offset = options.offset ?? 0;
+
+  // Get total count
+  const countRow = db.prepare(
+    `SELECT COUNT(*) as count FROM messages ${whereClause}`
+  ).get(...params) as { count: number };
+  const total = countRow.count;
+
+  // Get paginated data
+  const rows = db.prepare(
+    `SELECT * FROM messages ${whereClause} ORDER BY created_at ASC LIMIT ? OFFSET ?`
+  ).all(...params, limit, offset) as MessageRow[];
+
+  return {
+    data: rows.map(rowToMessage),
+    total,
+    limit,
+    offset,
+  };
+}
+
+export function clearMessages(db: Database.Database, phoneId?: string): void {
+  if (phoneId) {
+    db.prepare('DELETE FROM messages WHERE phone_id = ?').run(phoneId);
+  } else {
+    db.prepare('DELETE FROM messages').run();
+  }
+}
+
+export function updateMessageWebhookStatus(db: Database.Database, id: string, webhookStatus: string): void {
+  db.prepare('UPDATE messages SET webhook_status = ? WHERE id = ?').run(webhookStatus, id);
+}
