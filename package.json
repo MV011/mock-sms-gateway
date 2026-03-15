@@ -3,9 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/server/index.js",
+  "bin": {
+    "sms-mock": "dist/cli/index.js",
+    "sms-mock-mcp": "dist/mcp/server.js"
+  },
   "scripts": {
-    "dev": "tsx watch src/server/index.ts",
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "vite --config vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "vite build --config vite.config.ts",
+    "build": "npm run build:server && npm run build:client",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -23,14 +31,25 @@
   "homepage": "https://github.com/MV011/mock-sms-gateway#readme",
   "dependencies": {
     "@hono/node-server": "^1.19.11",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^12.8.0",
+    "commander": "^14.0.3",
     "hono": "^4.12.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
+    "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
