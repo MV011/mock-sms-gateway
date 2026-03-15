@@ -1,22 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import type Database from 'better-sqlite3';
+import type { Behavior, PhoneNumber, Direction, MessageStatus, Message, PaginatedMessages } from '../../shared/types.js';
+import { MAGIC_NUMBERS } from '../../shared/magic-numbers.js';
 
-// ---------- Types ----------
+export type { Behavior, PhoneNumber } from '../../shared/types.js';
 
-export type Behavior = 'deliver' | 'fail' | 'delay' | 'reject' | 'rate_limit' | 'timeout';
-
-export interface PhoneNumber {
-  id: string;
-  number: string;
-  label: string | null;
-  country_code: string | null;
-  behavior: Behavior;
-  behavior_config: Record<string, unknown> | null;
-  is_magic: boolean;
-  pinned: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// ---------- Server-only Input Types ----------
 
 export interface CreatePhoneNumberInput {
   number: string;
@@ -34,22 +23,6 @@ export interface UpdatePhoneNumberInput {
   behavior_config?: Record<string, unknown>;
   pinned?: boolean;
 }
-
-export interface MagicNumber {
-  number: string;
-  label: string;
-  behavior: string;
-  behavior_config: Record<string, unknown> | null;
-}
-
-const MAGIC_NUMBERS: MagicNumber[] = [
-  { number: '+40700000001', label: 'Always Deliver', behavior: 'deliver', behavior_config: null },
-  { number: '+40700000002', label: 'Always Fail', behavior: 'fail', behavior_config: { error_message: 'Simulated provider error' } },
-  { number: '+40700000003', label: 'Slow Delivery (3s)', behavior: 'delay', behavior_config: { delay_ms: 3000 } },
-  { number: '+40700000004', label: 'Invalid Number', behavior: 'reject', behavior_config: { error_message: 'Invalid phone number' } },
-  { number: '+40700000005', label: 'Rate Limited (5/hr)', behavior: 'rate_limit', behavior_config: { max_messages: 5, window_seconds: 3600 } },
-  { number: '+40700000006', label: 'Timeout (30s)', behavior: 'timeout', behavior_config: { timeout_ms: 30000 } },
-];
 
 export function seedMagicNumbers(db: Database.Database): void {
   const insert = db.prepare(`
@@ -192,23 +165,7 @@ export function deletePhoneNumber(db: Database.Database, id: string): boolean {
 
 // ---------- Message Types ----------
 
-export type Direction = 'outbound' | 'inbound';
-export type MessageStatus = 'delivered' | 'failed' | 'pending' | 'rejected';
-
-export interface Message {
-  id: string;
-  phone_id: string | null;
-  phone_number: string;
-  direction: Direction;
-  body: string;
-  from_name: string | null;
-  template_key: string | null;
-  status: MessageStatus;
-  error_message: string | null;
-  metadata: Record<string, unknown> | null;
-  webhook_status: string | null;
-  created_at: string;
-}
+export type { Direction, MessageStatus, Message, PaginatedMessages } from '../../shared/types.js';
 
 export interface CreateMessageInput {
   phone_number: string;
@@ -230,13 +187,6 @@ export interface GetMessagesOptions {
   status?: MessageStatus;
   limit?: number;
   offset?: number;
-}
-
-export interface PaginatedMessages {
-  data: Message[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 // ---------- Message Row Helper ----------

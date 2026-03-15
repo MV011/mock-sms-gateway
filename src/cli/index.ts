@@ -86,42 +86,12 @@ function printTable(
 
 // ---------- Magic number presets ----------
 
-const MAGIC_PRESETS: Record<
-  string,
-  { number: string; label: string; behavior: string; behavior_config?: Record<string, unknown> }
-> = {
-  deliver: { number: '+40700000001', label: 'Always Deliver', behavior: 'deliver' },
-  fail: {
-    number: '+40700000002',
-    label: 'Always Fail',
-    behavior: 'fail',
-    behavior_config: { error_message: 'Simulated provider error' },
-  },
-  delay: {
-    number: '+40700000003',
-    label: 'Slow Delivery (3s)',
-    behavior: 'delay',
-    behavior_config: { delay_ms: 3000 },
-  },
-  reject: {
-    number: '+40700000004',
-    label: 'Invalid Number',
-    behavior: 'reject',
-    behavior_config: { error_message: 'Invalid phone number' },
-  },
-  rate_limit: {
-    number: '+40700000005',
-    label: 'Rate Limited (5/hr)',
-    behavior: 'rate_limit',
-    behavior_config: { max_messages: 5, window_seconds: 3600 },
-  },
-  timeout: {
-    number: '+40700000006',
-    label: 'Timeout (30s)',
-    behavior: 'timeout',
-    behavior_config: { timeout_ms: 30000 },
-  },
-};
+import { MAGIC_NUMBERS } from '../shared/magic-numbers.js';
+
+// Index magic numbers by behavior for CLI lookup
+const MAGIC_PRESETS = Object.fromEntries(
+  MAGIC_NUMBERS.map((m) => [m.behavior, m]),
+);
 
 // ---------- CLI ----------
 

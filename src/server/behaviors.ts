@@ -1,4 +1,4 @@
-import type { Behavior, MessageStatus } from './db/queries.js';
+import type { Behavior, MessageStatus } from '../shared/types.js';
 
 export interface BehaviorResult {
   success: boolean;

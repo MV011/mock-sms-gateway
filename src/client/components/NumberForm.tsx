@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api, type Behavior, type CreateNumberInput } from '../lib/api';
+import { MAGIC_NUMBERS, type MagicNumberDef } from '../../shared/magic-numbers.js';
 
 // Country presets
 const COUNTRY_PRESETS = [
@@ -8,16 +9,6 @@ const COUNTRY_PRESETS = [
   { code: 'GB', flag: '\uD83C\uDDEC\uD83C\uDDE7', prefix: '+44', label: 'United Kingdom' },
   { code: 'DE', flag: '\uD83C\uDDE9\uD83C\uDDEA', prefix: '+49', label: 'Germany' },
   { code: 'FR', flag: '\uD83C\uDDEB\uD83C\uDDF7', prefix: '+33', label: 'France' },
-];
-
-// Magic number presets
-const MAGIC_PRESETS = [
-  { label: 'Always Deliver', behavior: 'deliver' as Behavior, number: '+40700000001', config: null },
-  { label: 'Always Fail', behavior: 'fail' as Behavior, number: '+40700000002', config: { error_message: 'Simulated provider error' } },
-  { label: 'Slow Delivery (3s)', behavior: 'delay' as Behavior, number: '+40700000003', config: { delay_ms: 3000 } },
-  { label: 'Invalid Number', behavior: 'reject' as Behavior, number: '+40700000004', config: { error_message: 'Invalid phone number' } },
-  { label: 'Rate Limited (5/hr)', behavior: 'rate_limit' as Behavior, number: '+40700000005', config: { max_messages: 5, window_seconds: 3600 } },
-  { label: 'Timeout (30s)', behavior: 'timeout' as Behavior, number: '+40700000006', config: { timeout_ms: 30000 } },
 ];
 
 // Behavior options
@@ -103,7 +94,7 @@ export default function NumberForm({ onCreated }: NumberFormProps) {
     }
   };
 
-  const handleMagicPreset = async (preset: typeof MAGIC_PRESETS[number]) => {
+  const handleMagicPreset = async (preset: MagicNumberDef) => {
     setSubmitting(true);
     setError(null);
     try {
@@ -112,7 +103,7 @@ export default function NumberForm({ onCreated }: NumberFormProps) {
         label: preset.label,
         country_code: 'RO',
         behavior: preset.behavior,
-        behavior_config: preset.config ?? undefined,
+        behavior_config: Object.keys(preset.behavior_config).length > 0 ? preset.behavior_config : undefined,
       });
       onCreated();
     } catch (err) {
@@ -301,7 +292,7 @@ export default function NumberForm({ onCreated }: NumberFormProps) {
       <div>
         <h3 className="mb-3 text-sm font-semibold text-gray-200">Magic Number Presets</h3>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-          {MAGIC_PRESETS.map((preset) => (
+          {MAGIC_NUMBERS.map((preset) => (
             <button
               key={preset.number}
               onClick={() => handleMagicPreset(preset)}
