@@ -87,25 +87,16 @@ export async function addStaticServing(app: Hono<AppEnv>): Promise<void> {
 
   const { serveStatic } = await import('@hono/node-server/serve-static');
 
-  // Relative root for serveStatic — it resolves from cwd
-  const root = resolve(clientDir, '..', '..');
-
   // Serve static assets from dist/client
   app.use(
     '/*',
-    serveStatic({
-      root: root + '/',
-      rewriteRequestPath: (path) => `dist/client${path}`,
-    }),
+    serveStatic({ root: clientDir }),
   );
 
   // SPA fallback: serve index.html for non-API, non-WS routes
   app.get(
     '*',
-    serveStatic({
-      root: root + '/',
-      rewriteRequestPath: () => 'dist/client/index.html',
-    }),
+    serveStatic({ root: clientDir, path: 'index.html' }),
   );
 }
 

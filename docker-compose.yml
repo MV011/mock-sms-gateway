@@ -1,0 +1,12 @@
+services:
+  sms-mock:
+    build: .
+    ports:
+      - "8026:8026"
+    environment:
+      STORAGE: memory
+    volumes:
+      - sms-data:/data
+
+volumes:
+  sms-data:
