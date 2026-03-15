@@ -11,6 +11,6 @@ export interface TestContext {
 
 export function createTestApp(): TestContext {
   const db = createDatabase(':memory:');
-  const app = createApp(db);
+  const { app } = createApp(db);
   return { app, db };
 }

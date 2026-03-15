@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type Database from 'better-sqlite3';
@@ -11,7 +14,12 @@ import replyRoute from './routes/reply.js';
 import statsRoute from './routes/stats.js';
 import { resetAll } from './db/queries.js';
 
-export function createApp(db: Database.Database): Hono<AppEnv> {
+export interface AppInstance {
+  app: Hono<AppEnv>;
+  ctx: AppContext;
+}
+
+export function createApp(db: Database.Database): AppInstance {
   const app = new Hono<AppEnv>();
   const rateLimiter = new RateLimiter();
 
@@ -61,7 +69,44 @@ export function createApp(db: Database.Database): Hono<AppEnv> {
     return c.json({ success: true });
   });
 
-  return app;
+  return { app, ctx };
+}
+
+/**
+ * Add static file serving for the built Vite frontend.
+ * Only applies when dist/client directory exists (production).
+ * In dev mode, Vite's dev server handles static files via proxy.
+ */
+export async function addStaticServing(app: Hono<AppEnv>): Promise<void> {
+  const __dirname = resolve(fileURLToPath(import.meta.url), '..');
+  const clientDir = resolve(__dirname, '..', 'client');
+
+  if (!existsSync(clientDir)) {
+    return;
+  }
+
+  const { serveStatic } = await import('@hono/node-server/serve-static');
+
+  // Relative root for serveStatic — it resolves from cwd
+  const root = resolve(clientDir, '..', '..');
+
+  // Serve static assets from dist/client
+  app.use(
+    '/*',
+    serveStatic({
+      root: root + '/',
+      rewriteRequestPath: (path) => `dist/client${path}`,
+    }),
+  );
+
+  // SPA fallback: serve index.html for non-API, non-WS routes
+  app.get(
+    '*',
+    serveStatic({
+      root: root + '/',
+      rewriteRequestPath: () => 'dist/client/index.html',
+    }),
+  );
 }
 
 // Start server when run directly
@@ -69,15 +114,22 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
 if (isDirectRun) {
   const { serve } = await import('@hono/node-server');
   const { createDatabase } = await import('./db/connection.js');
+  const { attachWebSocket } = await import('./routes/ws.js');
 
   const storage = process.env.STORAGE ?? 'memory';
   const storagePath = storage === 'memory' ? ':memory:' : storage;
   const port = parseInt(process.env.PORT ?? '8026', 10);
 
   const db = createDatabase(storagePath);
-  const app = createApp(db);
+  const { app, ctx } = createApp(db);
 
-  serve({ fetch: app.fetch, port }, () => {
+  // Add static file serving for production builds
+  await addStaticServing(app);
+
+  const server = serve({ fetch: app.fetch, port }, () => {
     console.log(`Mock SMS Gateway running on http://localhost:${port}`);
   });
+
+  // Attach WebSocket server to the HTTP server
+  attachWebSocket(server as import('node:http').Server, ctx);
 }
